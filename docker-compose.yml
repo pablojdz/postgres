@@ -17,17 +17,17 @@ services:
           - ./postgres-db:/var/lib/postgresql/data
         networks:
            - postgres-net
-    # pgadmin4:
-    #     image: dpage/pgadmin4
-    #     container_name: pgadmin4
-    #     restart: always
-    #     environment: 
-    #         PGADMIN_DEFAULT_EMAIL: "admin@localhost.com"
-    #         PGADMIN_DEFAULT_PASSWORD: "admin"
-    #     ports: 
-    #         - 8080:80
-    #     networks: 
-    #         - postgresql
+    pgadmin4:
+        image: dpage/pgadmin4:7
+        container_name: pgadmin4
+        restart: unless-stopped
+        environment: 
+            PGADMIN_DEFAULT_EMAIL: "admin@localhost.com"
+            PGADMIN_DEFAULT_PASSWORD: "admin"
+        ports: 
+            - 8081:80
+        networks: 
+            - postgres-net
 # volumes:
 #     postgres-db-volume:
 #         name: postgres-db-volume
