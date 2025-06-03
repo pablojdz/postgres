@@ -25,11 +25,10 @@ services:
             PGADMIN_DEFAULT_PASSWORD: "admin"
         ports: 
             - 8081:80
+        valumes:
+            - ./pgadmin4:/var/lib/pgadmin
         networks: 
             - postgres-net
-# volumes:
-#     postgres-db-volume:
-#         name: postgres-db-volume
 networks:
     postgres-net:
         name: postgres-net
