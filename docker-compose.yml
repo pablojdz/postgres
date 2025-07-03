@@ -12,9 +12,9 @@ services:
         ports:
             - 5432:5432
         volumes:
-          - ./postgres-db:/var/lib/postgresql/data
+            - ./postgres-db:/var/lib/postgresql/data
         networks:
-           - postgres-net
+            - postgres-net
     pgadmin4:
         image: dpage/pgadmin4:9
         container_name: pgadmin4
