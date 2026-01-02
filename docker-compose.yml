@@ -1,13 +1,13 @@
 services:
     postgres:
-        image: postgres:17-bookworm # bookworm = Debian12
+        image: postgres:18-trixie # trixie = Debian13
         container_name: postgres
         command: postgres -c 'max_connections=200'
-        restart: unless-stopped
+        #restart: unless-stopped # uncomment if needed
         environment:
             POSTGRES_USER: "admin"
             POSTGRES_PASSWORD: "P@ssw0rd"
-            POSTGRES_DB: "InventoryDW"
+            POSTGRES_DB: "DWH"
         ports:
             - 5432:5432
         volumes:
@@ -17,9 +17,9 @@ services:
     pgadmin4:
         image: dpage/pgadmin4:9
         container_name: pgadmin4
-        restart: unless-stopped
+        #restart: unless-stopped # uncomment if needed
         environment: 
-            PGADMIN_DEFAULT_EMAIL: "admin@localhost.com"
+            PGADMIN_DEFAULT_EMAIL: "admin@local.com"
             PGADMIN_DEFAULT_PASSWORD: "admin"
         ports: 
             - 8081:80
