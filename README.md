@@ -4,6 +4,7 @@ This repository contains a minimal Docker Compose setup to run PostgreSQL and pg
 
 **What this provides**
 - **Postgres**: image `postgres:18-trixie`, database `DWH`, user `admin`, password `P@ssw0rd`, port `5432` mapped to the host, persistent data at `./postgres-db`.
+- **Postgres**: image `postgres:18-trixie`, database `DWH`, user `admin`, password `P@ssw0rd`, port `5432` mapped to the host, persistent data at `./postgres-db` (mounted to `/var/lib/postgresql` inside the container).
 - **pgAdmin4**: image `dpage/pgadmin4:9`, default email `admin@local.com`, password `admin`, accessible on host port `8081`, persistent data at `./pgadmin4`.
 
 See the compose file for exact configuration: [docker-compose.yml](docker-compose.yml#L1-L40).
@@ -69,6 +70,42 @@ docker compose ps
 Troubleshooting
 - If the DB fails to start after changing Postgres major versions, remove the `./postgres-db` directory (this will delete data) or migrate data between versions properly.
 - If pgAdmin can't connect to Postgres from the host UI, add a server in pgAdmin using host `postgres` when configuring from inside the same Docker network (recommended) or `localhost`/`127.0.0.1` when connecting via the mapped port.
+
+Upgrading to Postgres 18+ / Migration notes
+- Postgres 18+ uses major-version-specific data directories under `/var/lib/postgresql` (not a single `data` directory). To avoid mount boundary issues the compose mounts `./postgres-db` at `/var/lib/postgresql`.
+- If you are upgrading an existing data directory created by older Postgres images, do NOT start the Postgres 18+ container against the old data in-place. Recommended safe approaches:
+
+1) Logical dump & restore (safe, recommended):
+
+```bash
+# stop containers
+docker compose down
+
+# create a dump (from the old container)
+docker run --rm --network host -v "$(pwd)/postgres-db:/var/lib/postgresql" postgres:15 \
+	bash -c "pg_dumpall -U admin" > dump.sql
+
+# after switching image, restore
+docker compose up -d
+cat dump.sql | docker exec -i postgres psql -U admin -d postgres
+```
+
+Or, simpler if the old container is still available:
+
+```bash
+docker exec -t postgres pg_dumpall -c -U admin > dump.sql
+```
+
+2) File-system level migration (advanced): use `pg_upgrade --link` between the two Postgres versions. This requires mounts that do not break across versioned subdirectories — hence mounting at `/var/lib/postgresql`. Carefully follow upstream docs: https://github.com/docker-library/postgres/pull/1259 and https://www.postgresql.org/docs/current/pgupgrade.html
+
+Backup your data directory before any destructive step:
+
+```bash
+docker compose down
+tar -czf postgres-db-backup-$(date +%Y%m%d%H%M%S).tar.gz ./postgres-db
+```
+
+If you need help performing a migration from a specific older version (for example `postgres:15`) to `postgres:18-trixie`, tell me the source version and I can provide exact commands.
 
 License / Safety
 - This setup is intended for local development and testing only. Harden before using in any public or production environment.
