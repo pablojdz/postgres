@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "DWH (Local)",
+      "Group": "Development",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "DWH",
+      "Username": "admin",
+      "SSLMode": "prefer"
+    }
+  }
+}

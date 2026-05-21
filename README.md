@@ -1,126 +1,95 @@
 # Deploy Postgres with Docker Compose
 
-This repository contains a minimal Docker Compose setup to run PostgreSQL and pgAdmin4 locally for development.
+This repository contains an optimized, best-practice Docker Compose setup to run PostgreSQL and pgAdmin4 locally for development.
 
 ## What this provides
 
-- **Postgres**: image `postgres:18-trixie`, database `DWH`, user `admin`, password `P@ssw0rd`, port `5432` mapped to the host, persistent data at `./postgres-db`.
-- **Postgres**: image `postgres:18-trixie`, database `DWH`, user `admin`, password `P@ssw0rd`, port `5432` mapped to the host, persistent data at `./postgres-db` (mounted to `/var/lib/postgresql` inside the container).
-- **pgAdmin4**: image `dpage/pgadmin4:9`, default email `admin@local.com`, password `admin`, accessible on host port `8081`, persistent data at `./pgadmin4`.
+- **Postgres**: image `postgres:18-trixie`, database `DWH`, user `admin` (configurable), persistent data at `./postgres-db` (mounted to `/var/lib/postgresql` inside the container).
+- **pgAdmin4**: image `dpage/pgadmin4:9` running in **Frictionless Desktop Mode** (single-user authentication bypass), accessible on host port `8081` (configurable), with **Automatic Postgres Connection Importing**.
+- **Container Healthcheck**: Ensures pgAdmin4 only starts up after Postgres is fully healthy and accepting connections.
+- **Externalized Credentials**: Environment configuration is completely isolated in a `.env` file.
 
-See the compose file for exact configuration: [docker-compose.yml](docker-compose.yml#L1-L40).
+See the compose file for exact configuration: [docker-compose.yml](docker-compose.yml).
 
 ## Getting started
 
-- **Prerequisites**: Docker and Docker Compose (or Docker CLI v2 with `docker compose`).
-- From this folder run:
+1. **Prerequisites**: Docker and Docker Compose (or Docker CLI v2 with `docker compose`).
+2. **Configuration**: Inspect and optionally adjust database credentials and host ports in your local [.env](.env) file:
+   ```env
+   POSTGRES_USER=admin
+   POSTGRES_PASSWORD=P@ssw0rd
+   POSTGRES_DB=DWH
+   POSTGRES_PORT=5432
+   PGADMIN_PORT=8081
+   ```
+3. **Spin up the stack**:
+   ```bash
+   docker compose up -d
+   ```
+4. **Stop and remove containers**:
+   ```bash
+   docker compose down
+   ```
+5. **Remove volumes (wipe data)**:
+   ```bash
+   docker compose down -v
+   ```
 
-```bash
-docker compose up -d
-```
+## Accessing the services
 
-- To stop and remove containers:
+- **pgAdmin**: Open <http://localhost:8081> in your browser. 
+  *   **No login required**: You will be automatically logged in (Desktop Mode).
+  *   **Pre-configured connection**: The **DWH (Local)** database server is already imported and visible in the left browser panel! Simply double-click it and enter your password (`P@ssw0rd` by default) to connect.
+- **psql (from host)**: If you have the `psql` client installed, you can connect directly using the port specified in `.env`:
+  ```bash
+  psql -h localhost -p 5432 -U admin -d DWH
+  ```
+- **psql (inside container)**: Exec directly into the running Postgres container:
+  ```bash
+  docker exec -it postgres psql -U admin -d DWH
+  ```
 
-```bash
-docker compose down
-```
+## Customization
 
-- To remove volumes (data):
-
-```bash
-docker compose down -v
-```
-
-Accessing the services
-
-- pgAdmin: open <http://localhost:8081> and log in with **<admin@local.com> / admin**. Add a new server in pgAdmin and point it to the Postgres container using host `postgres`, port `5432`, user `admin`, password `P@ssw0rd` (or use `localhost` and port mapping if connecting from the host).
-- psql (from host): if you have the `psql` client installed you can connect to the DB with:
-
-```bash
-psql -h localhost -p 5432 -U admin -d DWH
-```
-
-Or exec into the container:
-
-```bash
-docker exec -it postgres psql -U admin -d DWH
-```
-
-Customization
-
-- Change the Postgres image tag (e.g., `postgres:18` or `postgres:15`) in [docker-compose.yml](docker-compose.yml#L1-L40).
-- Update credentials by editing the `environment` values for `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in [docker-compose.yml](docker-compose.yml#L1-L40).
-- Persisted data directories are host paths relative to this repository: `./postgres-db` and `./pgadmin4`. Change them if you want a different location.
-- Ports can be changed in the `ports:` mapping in [docker-compose.yml](docker-compose.yml#L1-L40).
-
-Notes & recommendations
-
-- The compose sets Postgres with `command: postgres -c 'max_connections=200'` to increase `max_connections` — remove or adjust as needed.
-- The default credentials in this compose are weak — do not use them in production. Consider using environment files, Docker secrets, or a credentials manager.
-- Uncomment `restart: unless-stopped` in the compose if you want containers to restart automatically.
+- **Change Credentials**: Edit `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in [.env](.env) and recreate the containers. If changing pgAdmin server config, match the changes in [servers.json](servers.json).
+- **Change Host Ports**: Adjust `POSTGRES_PORT` and `PGADMIN_PORT` in [.env](.env).
+- **Automatic Server Auto-login**: If you want to bypass the password prompt inside pgAdmin when connecting, you can configure a `.pgpass` file (refer to the PostgreSQL documentation for details).
+- **Multi-user Mode (Production)**: If deploying outside a local environment, restore pgAdmin authentication by removing `PGADMIN_CONFIG_SERVER_MODE: "False"` from `docker-compose.yml` and configuring email and passwords.
 
 ## Useful commands
 
-- View logs:
+- **View logs**:
+  ```bash
+  docker compose logs -f postgres
+  docker compose logs -f pgadmin4
+  ```
+- **List container health status**:
+  ```bash
+  docker compose ps
+  ```
 
-```bash
-docker compose logs -f postgres
-docker compose logs -f pgadmin4
-```
+## Troubleshooting
 
-- List containers:
+- **Permissions**: pgAdmin4 runs as a non-root user (UID `5050`). If pgAdmin fails to write its configuration, make sure the host `./pgadmin4` folder is writeable by the container.
+- **Upgrades / Migrations**: Postgres 18+ uses major-version-specific data directories under `/var/lib/postgresql`. If upgrading an existing data directory from older Postgres versions, perform a dump/restore or use `pg_upgrade`.
 
-```bash
-docker compose ps
-```
+### Safe Logical Migration (Example: upgrading from postgres:15)
 
-Troubleshooting
+1. Dump data from the older version:
+   ```bash
+   docker run --rm --network host -v "$(pwd)/postgres-db:/var/lib/postgresql" postgres:15 \
+     bash -c "pg_dumpall -U admin" > dump.sql
+   ```
+2. Recreate containers with version 18:
+   ```bash
+   docker compose down -v
+   docker compose up -d
+   ```
+3. Restore data:
+   ```bash
+   cat dump.sql | docker exec -i postgres psql -U admin -d postgres
+   ```
 
-- If the DB fails to start after changing Postgres major versions, remove the `./postgres-db` directory (this will delete data) or migrate data between versions properly.
-- If pgAdmin can't connect to Postgres from the host UI, add a server in pgAdmin using host `postgres` when configuring from inside the same Docker network (recommended) or `localhost`/`127.0.0.1` when connecting via the mapped port.
+## License / Safety
 
-Upgrading to Postgres 18+ / Migration notes
-
-- Postgres 18+ uses major-version-specific data directories under `/var/lib/postgresql` (not a single `data` directory). To avoid mount boundary issues the compose mounts `./postgres-db` at `/var/lib/postgresql`.
-- If you are upgrading an existing data directory created by older Postgres images, do NOT start the Postgres 18+ container against the old data in-place. Recommended safe approaches:
-
-1. Logical dump & restore (safe, recommended):
-
-```bash
-# stop containers
-docker compose down
-
-# create a dump (from the old container)
-docker run --rm --network host -v "$(pwd)/postgres-db:/var/lib/postgresql" postgres:15 \
- bash -c "pg_dumpall -U admin" > dump.sql
-
-# after switching image, restore
-docker compose up -d
-cat dump.sql | docker exec -i postgres psql -U admin -d postgres
-```
-
-Or, simpler if the old container is still available:
-
-```bash
-docker exec -t postgres pg_dumpall -c -U admin > dump.sql
-```
-
-1) File-system level migration (advanced): use `pg_upgrade --link` between the two Postgres versions. This requires mounts that do not break across versioned subdirectories — hence mounting at `/var/lib/postgresql`. Carefully follow upstream docs: [https://github.com/docker-library/postgres/pull/1259](https://github.com/docker-library/postgres/pull/1259) and [https://www.postgresql.org/docs/current/pgupgrade.html](https://www.postgresql.org/docs/current/pgupgrade.html)
-
-Backup your data directory before any destructive step:
-
-```bash
-docker compose down
-tar -czf postgres-db-backup-$(date +%Y%m%d%H%M%S).tar.gz ./postgres-db
-```
-
-If you need help performing a migration from a specific older version (for example `postgres:15`) to `postgres:18-trixie`, tell me the source version and I can provide exact commands.
-
-License / Safety
-
-- This setup is intended for local development and testing only. Harden before using in any public or production environment.
-
-If you'd like, I can also:
-
-- add an `.env` file example and update `docker-compose.yml` to load it, or
-- add a brief `Makefile` with common commands.
+- This optimized setup is designed for robust and convenient local development. Always secure credentials and enable authentication before deploying to public or production servers.
